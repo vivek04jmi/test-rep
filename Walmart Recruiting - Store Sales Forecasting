@@ -1,0 +1,96 @@
+####### Walmart Recruiting - Store Sales Forecasting ####
+
+# loading libraries
+
+library(dplyr)
+library(car)
+library(caret)
+
+# Loading data
+train <- read.csv("train.csv", stringsAsFactors = FALSE)
+test <- read.csv("test.csv", stringsAsFactors = FALSE)
+features <- read.csv("features.csv", stringsAsFactors = FALSE)
+stores <- read.csv("stores.csv", stringsAsFactors = FALSE)
+submission <- read.csv("sampleSubmission.csv", stringsAsFactors = FALSE)
+
+# creating primary key
+
+features$Date <- as.Date(features$Date, "%d-%m-%Y")
+
+features$ID <- paste(features$Store, features$Date, sep = "_")
+train$ID <- paste(train$Store, train$Date, sep = "_")
+test$ID <- paste(test$Store, test$Date, sep = "_")
+
+# Merging features in train data
+train_full <- left_join(train, features, by = "ID")
+
+# Merging features in test data
+test_full <- left_join(test, features, by = "ID")
+
+# Extracting store size and type in train and test data
+
+train_full$Type <- stores[match(train_full$Store.x,stores$Store),2] 
+train_full$Size <- stores[match(train_full$Store.x,stores$Store),3] 
+
+test_full$Type <- stores[match(test_full$Store.x,stores$Store),2] 
+test_full$Size <- stores[match(test_full$Store.x,stores$Store),3] 
+
+# Extracting week from date
+
+train_full$Week <- as.numeric(strftime(train_full$Date.x, format = "%V"))
+test_full$Week <- as.numeric(strftime(test_full$Date.x, format = "%V"))
+
+# Create model
+
+summary(train_full)
+
+train_full$Markdown1 <- as.numeric(ifelse(is.na(train_full$MarkDown1), "0", 
+                                train_full$MarkDown1))
+train_full$Markdown2 <- as.numeric(ifelse(is.na(train_full$MarkDown2), "0", 
+                                          train_full$MarkDown2))
+train_full$Markdown3 <- as.numeric(ifelse(is.na(train_full$MarkDown3), "0", 
+                                          train_full$MarkDown3))
+train_full$Markdown4 <- as.numeric(ifelse(is.na(train_full$MarkDown4), "0", 
+                                          train_full$MarkDown4))
+train_full$Markdown5 <- as.numeric(ifelse(is.na(train_full$MarkDown5), "0", 
+                                          train_full$MarkDown5))
+
+test_full$Markdown1 <- as.numeric(ifelse(is.na(test_full$MarkDown1), "0", 
+                                          test_full$MarkDown1))
+test_full$Markdown2 <- as.numeric(ifelse(is.na(test_full$MarkDown2), "0", 
+                                          test_full$MarkDown2))
+test_full$Markdown3 <- as.numeric(ifelse(is.na(test_full$MarkDown3), "0", 
+                                          test_full$MarkDown3))
+test_full$Markdown4 <- as.numeric(ifelse(is.na(test_full$MarkDown4), "0", 
+                                          test_full$MarkDown4))
+test_full$Markdown5 <- as.numeric(ifelse(is.na(test_full$MarkDown5), "0", 
+                                          test_full$MarkDown5))
+
+## Custom function to count number of markdowns
+
+train_full$x <- rowSums(ifelse(train_full[,22:26]>0,1,0))
+train_full$M_sum <- rowSums(train_full[,22:26])
+colnames(train_full)
+
+train_full <- select(train_full, -c(11:15))
+
+test_full$x <- rowSums(ifelse(test_full[,21:25]>0,1,0))
+test_full$M_sum <- rowSums(test_full[,21:25])
+colnames(test_full)
+
+test_full <- select(test_full, -c(10:14))
+
+## Model generation
+
+summary(train_full)
+
+lm1 <- lm(Weekly_Sales ~ Store.x+Dept+IsHoliday.x+Temperature+
+            CPI+Unemployment+Size+Week+x+M_sum, data = train_full)
+summary(lm1)
+vif(lm1)
+
+test_pred <- predict(lm1, newdata = test_full[,c(1,2,4,8,10,11,12,14,15,
+                                                 21,22)])
+
+submission$Weekly_Sales <- test_pred
+write.csv(submission, "submission.csv", row.names = FALSE)
